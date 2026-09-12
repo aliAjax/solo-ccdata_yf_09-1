@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
-const BASE = 'http://localhost:4173/';
+const BASE = process.env.E2E_BASE || 'http://localhost:4173/';
 const shots = '/tmp/e2e-shots';
 fs.mkdirSync(shots, { recursive: true });
 let pass = 0;

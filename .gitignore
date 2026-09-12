@@ -1,0 +1,10 @@
+node_modules/
+dist/
+
+# 浏览器回归本地环境（Playwright 浏览器、解包的系统库、apt 缓存、预览日志）
+.e2e-tools/
+
+# 测试运行产物
+test-results/
+playwright-report/
+*.log

@@ -1,1 +1,26 @@
-{"name":"ccdata-yf-09-research-library","private":true,"version":"1.0.0","type":"module","scripts":{"dev":"vite","build":"vite build","preview":"vite preview"},"dependencies":{"@vitejs/plugin-react":"latest","react":"latest","react-dom":"latest","vite":"latest"},"devDependencies":{"playwright":"^1.63.0"}}
+{
+  "name": "ccdata-yf-09-research-library",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "e2e:env": "bash scripts/e2e-env.sh",
+    "e2e:build": "bash scripts/e2e.sh build",
+    "e2e": "bash scripts/e2e.sh all",
+    "e2e:desktop": "bash scripts/e2e.sh desktop",
+    "e2e:mobile": "bash scripts/e2e.sh mobile",
+    "e2e:compare": "bash scripts/e2e.sh compare"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}

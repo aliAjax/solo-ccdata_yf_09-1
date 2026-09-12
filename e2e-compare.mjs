@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 
 const MOBILE = !!process.env.MOBILE;
-const BASE = 'http://localhost:4173/';
+const BASE = process.env.E2E_BASE || 'http://localhost:4173/';
 const shots = MOBILE ? '/tmp/e2e-mobile-cmp' : '/tmp/e2e-cmp';
 fs.mkdirSync(shots, { recursive: true });
 let pass = 0;
