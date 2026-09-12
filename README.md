@@ -29,14 +29,16 @@ npm run e2e:build        # 等同于 npm run build（走统一脚本的构建路
 
 ### 环境准备做了什么（`scripts/e2e-env.sh`，幂等、无 root）
 
-首次运行自动完成，已就绪的步骤会跳过，所有产物都在项目内 `.e2e-tools/`（已 gitignore），不写系统目录：
+脚本做了平台检测，同时兼容 **macOS 自带 Bash 3.2** 与 **Linux（含精简 Debian 容器）**；不使用关联数组、`mapfile` 等 Bash 4+ 语法。首次运行自动完成、已就绪即跳过，产物都在项目内 `.e2e-tools/`（已 gitignore），不写系统目录：
 
 1. 缺 npm 依赖时 `npm ci`（回退 `npm install`）；
-2. 通过 `PLAYWRIGHT_BROWSERS_PATH=.e2e-tools/pw-browsers` 在项目内下载 Playwright Chromium；
-3. 若 `ldd` 发现浏览器缺系统共享库（精简 Debian 容器常见），用项目内 apt 缓存目录 `apt-get download` 拉取对应 **.deb** 并解包到 `.e2e-tools/sysroot`，运行时以 `LD_LIBRARY_PATH` 加载——不执行 sudo、不改系统库；
-4. 无中文字体时下载 `fonts-wqy-zenhei` 安装到用户字体目录 `~/.fonts`（仅为截图中文不成方框；可删）。
+2. 通过 `PLAYWRIGHT_BROWSERS_PATH=.e2e-tools/pw-browsers` 在项目内下载 Playwright Chromium（按平台自动定位二进制，不写死 linux 路径）；
+3. **仅 Linux**：若 `ldd` 发现浏览器缺系统共享库，逐包用项目内 apt 缓存 `apt-get download` 拉 **.deb**、通过完整性校验后解包到 `.e2e-tools/sysroot`，运行时以 `LD_LIBRARY_PATH` 加载——不执行 sudo、不改系统库。**macOS 直接跳过**（Playwright 浏览器自包含依赖、系统自带中文字体），不调用 `ldd/apt/dpkg`；
+4. 无中文字体的 Linux：下载 `fonts-wqy-zenhei` 安装到用户字体目录 `~/.fonts`（仅为截图中文不成方框；失败只警告，不影响断言）。
 
-运行配置：`scripts/e2e.sh` 构建后用 `vite preview --port 4173 --strictPort` 起服务（端口已被占用时直接复用），把地址经 `E2E_BASE` 传给用例，退出时自动关掉自己启动的预览进程。
+健壮性细节：下载的每个 .deb 都会用 `dpkg-deb --fsys-tarfile | tar t` **全量校验**（慢网络可能留下“字节数看似正确、数据段却截断”的包，仅 `-I` 查不出来），损坏即删除重下、最多 3 次；系统库只解包通过校验的包，避免截断的 `libnss3.so` 等导致浏览器 `SIGBUS` 崩溃。所有“探测型”命令（如 `ldd`）都在函数里兜底为成功返回，避免 `set -e` 下 `v="$(...)"` 因命令不存在（macOS 无 `ldd`）而**直接终止脚本**。
+
+运行配置：`scripts/e2e.sh` 构建后直接用 `node_modules/.bin/vite preview --port 4173 --strictPort` 起服务（避免 `npx` 多一层进程导致清理时泄漏；端口被占用则复用），把地址经 `E2E_BASE` 传给用例，`trap` 在退出时关掉自己启动的预览进程；单个用例首次失败会自动重试一次。
 
 可用环境变量：
 
@@ -48,8 +50,10 @@ npm run e2e:build        # 等同于 npm run build（走统一脚本的构建路
 
 ## 失败排查
 
-- **浏览器起不来 / `error while loading shared libraries: libxxx.so`**：说明系统库没解析成功。单独跑 `npm run e2e:env` 查看仍缺哪些库；Debian/Ubuntu 会自动解包，其它发行版请用系统包管理器装 Chromium 依赖后加 `E2E_SKIP_SYSDEPS=1` 重跑。`.e2e-tools/libdirs.txt` 是当前本地库目录，`env.summary` 记录了实际使用的变量。
-- **下载失败（npm / Playwright / apt / 字体）**：脚本可安全重跑，已下载的内容不会重复拉取；网络恢复后再执行即可。字体下载失败只影响截图字形，不影响断言。
+- **macOS 自带 Bash 一进入环境准备就退出**：已修复（原因是 `set -e` 下命令替换调用了不存在的 `ldd`）。请确认脚本是最新版；可用 `bash scripts/e2e-env.sh` 单独验证，应直接提示“非 Linux…跳过”并以 0 退出。脚本无需 Homebrew 的新版 Bash，Bash 3.2 即可运行。
+- **浏览器起不来 / `error while loading shared libraries: libxxx.so`**：说明系统库没解析成功。单独跑 `npm run e2e:env` 查看仍缺哪些库；Debian/Ubuntu 会自动解包，其它 Linux 发行版请用系统包管理器装 Chromium 依赖后加 `E2E_SKIP_SYSDEPS=1` 重跑。`.e2e-tools/libdirs.txt` 是当前本地库目录，`env.summary` 记录了实际使用的变量。
+- **浏览器一启动就崩溃（如退出码 135/SIGBUS）**：通常是慢网络留下了截断的系统库/字体 .deb。脚本已会校验并自动删除重下；若仍遇到，可直接删掉 `.e2e-tools/sysroot` 与 `.e2e-tools/debs` 后重跑（会重新下载、解包）。
+- **下载失败（npm / Playwright / apt / 字体）**：脚本可安全重跑，已下载且完整的内容不会重复拉取；网络恢复后再执行即可。Playwright 浏览器体积大，若 CDN 超时，可单独多执行几次 `npx playwright install chromium`，或设 `PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=600000`。字体失败只影响截图字形，不影响断言。
 - **端口冲突**：`E2E_PORT=4200 npm run e2e` 换端口；或脚本检测到端口上已有可用站点会直接复用。
-- **某条用例失败**：看终端最后一个「断言失败」名称，并打开它打印的截图目录中的 `FAIL.png`；预览服务日志在 `.e2e-tools/preview.log`。注意对比用例会真实创建「空问题甲/乙」等种子后数据——都在无头浏览器的临时 profile 里，不影响本机浏览器。
+- **某条用例失败**：看终端最后一个「断言失败」名称，并打开它打印的截图目录中的 `FAIL.png`；预览服务日志在 `.e2e-tools/preview.log`。用例之间互不影响（每个用例都从内置种子起步，且各用例自身清空 localStorage）。注意对比用例会在无头临时 profile 里创建「空问题甲/乙」等数据，不影响本机浏览器。
 - **想手动点开页面验证**：`npm run build && npm run preview`，浏览器打开 `http://localhost:4173/`。应用首次访问写入的是内置示例数据，之后全部存于 `localStorage`（键 `research-workbench-v1`，旧版 `research-library` 会自动迁移）。

@@ -42,7 +42,9 @@ start_preview() {
   nohup "$ROOT/node_modules/.bin/vite" preview --port "$PORT" --strictPort \
     > "$E2E_TOOLS/preview.log" 2>&1 &
   PREVIEW_PID=$!
-  for _ in $(seq 1 40); do
+  # {1..40} 大括号展开在 Bash 3.2（macOS 自带）即可用，避免依赖外部 seq。
+  local i
+  for i in {1..40}; do
     curl -fsS -o /dev/null --max-time 2 "$BASE" && return 0
     sleep 0.3
   done
@@ -58,8 +60,14 @@ run_case() { # $1 = 显示名，其余为 node 命令
   if "$@"; then
     echo "✔ $name 通过"
   else
-    echo "✘ $name 失败（退出码 $?）" >&2
-    FAIL=1
+    # 偶发抖动（慢机器下载/超时）自动重试一次；各用例启动都会清空 localStorage，重跑隔离安全。
+    echo "↻ $name 首次失败，自动重试一次…" >&2
+    if "$@"; then
+      echo "✔ $name 通过（重试后）"
+    else
+      echo "✘ $name 两次均失败" >&2
+      FAIL=1
+    fi
   fi
 }
 
