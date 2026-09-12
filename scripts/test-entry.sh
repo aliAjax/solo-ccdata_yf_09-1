@@ -30,7 +30,7 @@ PASS=0; FAIL=0
 check() {
   local desc="$1" exp="$2" rc="$3" out="$4"; shift 4
   local ok=1 p
-  if [ "$rc" != "$exp" ]; then ok=0; echo "    退出码：期望 $exp，实际 $rc"; fi
+  if [ "$rc" != "$exp" ]; then ok=0; echo "    退出码：期望 ${exp}，实际 ${rc}"; fi
   for p in "$@"; do
     if ! grep -qF -- "$p" "$out" 2>/dev/null; then ok=0; echo "    缺少提示：$p"; fi
   done
@@ -112,20 +112,23 @@ env E2E_TOOLS_DIR="$D" E2E_SKIP_SYSDEPS=1 E2E_SKIP_FONT=1 \
   bash "$ENV_SH" >"$TMP/envok.out" 2>&1; RC=$?
 check "环境准备返回 0 并打印就绪" 0 "$RC" "$TMP/envok.out" "环境就绪" "HEADLESS_SHELL="
 
-echo "── 6. 静态：中文标点前的变量必须花括号定界 ─────────────────────────"
+echo "── 6. 静态：全部脚本中，中文标点前的变量必须花括号定界 ─────────────"
 STATIC_RC=0
-# LC_ALL=C 下高字节(>=0x80)即多字节 UTF-8 标点；[:cntrl:] 排除换行等控制符。
-if LC_ALL=C grep -nE '\$[A-Za-z_][A-Za-z0-9_]*[^ -~[:cntrl:]]' "$E2E_SH" "$ENV_SH" >"$TMP/static.out" 2>&1; then
+# 扫描 scripts/ 下所有 shell 脚本（含本测试自身），避免“测试脚本自己违规却不被发现”。
+# LC_ALL=C 下 [^ -~[:cntrl:]] 即 >=0x80 的多字节 UTF-8 字节；
+# 同时覆盖命名变量（如 ${FOO}）与位置/特殊参数（如 ${1}、${?}）。
+if LC_ALL=C grep -nE '\$[A-Za-z_][A-Za-z0-9_]*[^ -~[:cntrl:]]|\$[0-9#?@!*-][^ -~[:cntrl:]]' \
+     "$RUN_ROOT"/scripts/*.sh >"$TMP/static.out" 2>&1; then
   STATIC_RC=1
-  echo "  ✘ 发现变量名后紧跟多字节字符："; sed 's/^/    | /' "$TMP/static.out"
+  echo "  ✘ 发现变量后紧跟多字节字符（应用 \${var} 定界）："; sed 's/^/    | /' "$TMP/static.out"
   FAIL=$((FAIL + 1))
 fi
 grep -qF '（模式：${MODE}）' "$E2E_SH" || { STATIC_RC=1; echo "  ✘ 成功提示未用 \${MODE} 定界"; FAIL=$((FAIL + 1)); }
 grep -qF '产物目录：${PLAYWRIGHT_BROWSERS_PATH}' "$ENV_SH" || { STATIC_RC=1; echo "  ✘ 浏览器失败提示未用 \${PLAYWRIGHT_BROWSERS_PATH} 定界"; FAIL=$((FAIL + 1)); }
-[ "$STATIC_RC" = 0 ] && { echo "  ✔ 全部中文提示变量均已花括号定界"; PASS=$((PASS + 1)); }
+[ "$STATIC_RC" = 0 ] && { echo "  ✔ 全部脚本中文提示变量均已花括号定界（含本测试自身）"; PASS=$((PASS + 1)); }
 
 echo
 echo "──────────────────────────────────────────────────────────────────"
-echo "入口轻量测试结果：通过 $PASS，失败 $FAIL"
+echo "入口轻量测试结果：通过 ${PASS}，失败 ${FAIL}"
 if [ "$FAIL" -ne 0 ]; then exit 1; fi
 exit 0
