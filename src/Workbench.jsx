@@ -3,6 +3,7 @@ import {
   STANCES, stanceOf, linksOfQuestion, coverage, unlinkedPapers,
   questionsOfPaper, buildExport, downloadJSON,
 } from './store.js';
+import Compare from './Compare.jsx';
 
 function Badge({ stance }) {
   const s = stanceOf(stance);
@@ -140,17 +141,21 @@ function EvidenceCard({ link, paper, onEdit, onRemove }) {
   );
 }
 
-export default function Workbench({ store, notice, focusQuestionId }) {
+export default function Workbench({ store, notice, focusQuestionId, goPaper, goQuestion }) {
   const { questions, links, papers } = store;
   const [selectedId, setSelectedId] = useState(focusQuestionId ?? questions[0]?.id ?? null);
   const [stanceFilter, setStanceFilter] = useState('all');
   const [qQuery, setQQuery] = useState('');
   const [editingQuestion, setEditingQuestion] = useState(null); // null | 'new' | question object
   const [linkDialog, setLinkDialog] = useState(null); // { presetPaperId? } | null
+  const [mode, setMode] = useState('detail'); // 'detail' | 'compare'
 
-  // 从文献详情跳转过来时定位到指定问题
+  // 从文献详情跳转过来时定位到指定问题，并退出对比模式
   useEffect(() => {
-    if (focusQuestionId) setSelectedId(focusQuestionId);
+    if (focusQuestionId) {
+      setSelectedId(focusQuestionId);
+      setMode('detail');
+    }
   }, [focusQuestionId]);
 
   // 问题可能被删除后，选中项需要兜底
@@ -207,7 +212,14 @@ export default function Workbench({ store, notice, focusQuestionId }) {
       <div className="wb-list">
         <div className="wb-list-head">
           <strong>研究问题</strong>
-          <button className="primary small" onClick={() => setEditingQuestion('new')}>＋ 新建问题</button>
+          <div className="wb-list-btns">
+            <button className="outline small" disabled={questions.length < 2}
+              title={questions.length < 2 ? '至少需要两个问题' : '对比两个问题'}
+              onClick={() => setMode(mode === 'compare' ? 'detail' : 'compare')}>
+              {mode === 'compare' ? '✕ 退出对比' : '⇄ 对比'}
+            </button>
+            <button className="primary small" onClick={() => setEditingQuestion('new')}>＋ 新建</button>
+          </div>
         </div>
         <div className="search compact">⌕
           <input placeholder="筛选问题…" value={qQuery} onChange={(e) => setQQuery(e.target.value)} />
@@ -216,7 +228,9 @@ export default function Workbench({ store, notice, focusQuestionId }) {
           {filteredQuestions.map((q) => {
             const n = linksOfQuestion(links, q.id).length;
             return (
-              <button key={q.id} className={`q-item ${q.id === qid ? 'on' : ''}`} onClick={() => setSelectedId(q.id)}>
+              <button key={q.id}
+                className={`q-item ${mode === 'detail' && q.id === qid ? 'on' : ''}`}
+                onClick={() => { setSelectedId(q.id); setMode('detail'); }}>
                 <h4>{q.title}</h4>
                 <small>{n} 条证据 · {new Set(linksOfQuestion(links, q.id).map((l) => l.paperId)).size} 篇文献</small>
               </button>
@@ -226,9 +240,12 @@ export default function Workbench({ store, notice, focusQuestionId }) {
         </div>
       </div>
 
-      {/* 右：问题工作台 */}
+      {/* 右：对比模式 或 问题工作台 */}
       <div className="wb-main">
-        {!question ? (
+        {mode === 'compare' ? (
+          <Compare store={store} goPaper={goPaper} goQuestion={(id) => { setSelectedId(id); setMode('detail'); }}
+            onExit={() => setMode('detail')} />
+        ) : !question ? (
           <div className="wb-empty">
             <p>还没有研究问题。</p>
             <button className="primary" onClick={() => setEditingQuestion('new')}>＋ 创建第一个问题</button>

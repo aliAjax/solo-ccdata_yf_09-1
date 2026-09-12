@@ -7,6 +7,7 @@ export default function App() {
   const store = useResearch();
   const [view, setView] = useState('library'); // 'library' | 'workbench'
   const [focusQuestion, setFocusQuestion] = useState(null);
+  const [focusPaper, setFocusPaper] = useState(null);
   const [toast, setToast] = useState(null); // { text, error }
 
   const notice = useCallback((text, error = false) => {
@@ -18,6 +19,10 @@ export default function App() {
   const goQuestion = (qid) => {
     setFocusQuestion(qid);
     setView('workbench');
+  };
+  const goPaper = (pid) => {
+    setFocusPaper(pid);
+    setView('library');
   };
 
   const nQuestions = store.questions.length;
@@ -68,9 +73,10 @@ export default function App() {
           </button>
         </div>
         {view === 'library' ? (
-          <Library store={store} notice={notice} goQuestion={goQuestion} />
+          <Library store={store} notice={notice} goQuestion={goQuestion} focusPaperId={focusPaper} />
         ) : (
-          <Workbench store={store} notice={notice} focusQuestionId={focusQuestion} />
+          <Workbench store={store} notice={notice} focusQuestionId={focusQuestion} goPaper={goPaper}
+            goQuestion={goQuestion} />
         )}
       </main>
 

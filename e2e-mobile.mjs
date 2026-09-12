@@ -88,7 +88,7 @@ try {
   ok('工作台无横向溢出', ov.scrollW <= ov.docW + 1);
 
   // ---------- 2. 创建问题（弹窗适配检查） ----------
-  await page.getByRole('button', { name: '＋ 新建问题' }).click();
+  await page.getByRole('button', { name: '＋ 新建' }).click();
   let fit = await modalFits('创建问题');
   ok('创建问题弹窗宽度不超屏', fit.widthOk);
   ok('创建按钮滚动后可见可点', fit.submitVisible);

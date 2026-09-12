@@ -1,9 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { uid, questionsOfPaper } from './store.js';
 
-export default function Library({ store, notice, goQuestion }) {
+export default function Library({ store, notice, goQuestion, focusPaperId }) {
   const { papers, questions, links, savePaper } = store;
-  const [selected, setSelected] = useState(papers[0]?.id ?? null);
+  const [selected, setSelected] = useState(focusPaperId ?? papers[0]?.id ?? null);
+  useEffect(() => {
+    if (focusPaperId != null) setSelected(focusPaperId);
+  }, [focusPaperId]);
   const [query, setQuery] = useState('');
   const [tag, setTag] = useState('全部');
   const [show, setShow] = useState(false);

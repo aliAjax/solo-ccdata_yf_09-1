@@ -40,7 +40,7 @@ try {
   await page.screenshot({ path: `${shots}/02-workbench-seed.png`, fullPage: true });
 
   // ---------- 2. 创建问题 ----------
-  await page.getByRole('button', { name: '＋ 新建问题' }).click();
+  await page.getByRole('button', { name: '＋ 新建' }).click();
   await page.locator('.modal h2').waitFor();
   const TITLE = '测试问题：工具使用能否构成认知？';
   await page.locator('.modal input').first().fill(TITLE);

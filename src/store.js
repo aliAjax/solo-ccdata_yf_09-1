@@ -91,6 +91,46 @@ export const unlinkedPapers = (data, qid) => {
   return data.papers.filter((p) => !linkedIds.has(p.id));
 };
 
+/* ---------- 双问题对比 ---------- */
+/** 仅「支持 vs 反驳」（任一方向）算立场冲突；存疑不算硬冲突 */
+export const isStanceConflict = (x, y) =>
+  (x === 'support' && y === 'refute') || (x === 'refute' && y === 'support');
+
+export function compareQuestions(data, qidA, qidB) {
+  const paperById = new Map(data.papers.map((p) => [p.id, p]));
+  const index = (qid) => {
+    const m = new Map();
+    for (const l of data.links) if (l.questionId === qid) m.set(l.paperId, l);
+    return m;
+  };
+  const mapA = index(qidA);
+  const mapB = index(qidB);
+  const makeRow = (pid) => ({
+    paper: paperById.get(pid) || { id: pid, title: '(已删除的文献)', authors: '', year: null },
+    linkA: mapA.get(pid) || null,
+    linkB: mapB.get(pid) || null,
+  });
+  const shared = [];
+  const onlyA = [];
+  const onlyB = [];
+  const conflicts = [];
+  const allIds = new Set([...mapA.keys(), ...mapB.keys()]);
+  for (const pid of allIds) {
+    const row = makeRow(pid);
+    if (mapA.has(pid) && mapB.has(pid)) {
+      shared.push(row);
+      if (isStanceConflict(row.linkA.stance, row.linkB.stance)) conflicts.push(row);
+    } else if (mapA.has(pid)) {
+      onlyA.push(row);
+    } else {
+      onlyB.push(row);
+    }
+  }
+  const byYear = (r1, r2) => (r1.paper.year ?? 9999) - (r2.paper.year ?? 9999);
+  shared.sort(byYear); onlyA.sort(byYear); onlyB.sort(byYear); conflicts.sort(byYear);
+  return { shared, onlyA, onlyB, conflicts, totalEvidence: allIds.size };
+}
+
 /* ---------- 结构化导出 ---------- */
 export function buildExport(data, qid) {
   const q = data.questions.find((x) => x.id === qid);
