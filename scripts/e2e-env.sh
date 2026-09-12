@@ -66,7 +66,7 @@ if [ -z "$HEADLESS_SHELL" ]; then
   (cd "$E2E_ROOT" && npx playwright install chromium)
   HEADLESS_SHELL="$(find_headless_shell)"
 fi
-[ -n "$HEADLESS_SHELL" ] || die "Chromium 下载失败，请检查网络后重试（产物目录：$PLAYWRIGHT_BROWSERS_PATH）。"
+[ -n "$HEADLESS_SHELL" ] || die "Chromium 下载失败，请检查网络后重试（产物目录：${PLAYWRIGHT_BROWSERS_PATH}）。"
 log "浏览器：$HEADLESS_SHELL"
 
 # ---------- 3. 中文字体（截图里中文不能是方框） ------------------------------

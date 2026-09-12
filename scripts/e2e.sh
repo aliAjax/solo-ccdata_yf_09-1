@@ -54,7 +54,7 @@ start_preview() {
     echo "找不到 node_modules/.bin/vite——npm 依赖未装好，无法启动预览。" >&2
     exit 1
   fi
-  log "启动 vite preview（端口 $PORT，日志 .e2e-tools/preview.log）…"
+  log "启动 vite preview（端口 ${PORT}，日志 .e2e-tools/preview.log）…"
   # 直接用本地 vite 可执行文件，使 $! 就是服务进程（npx 会再派生一层子进程，
   # 只杀 npx 会导致预览服务泄漏）。
   nohup "$ROOT/node_modules/.bin/vite" preview --port "$PORT" --strictPort \
@@ -96,20 +96,22 @@ run_case() { # $1 = 显示名，其余为 node 命令
 
 FAIL=0
 
-log "构建生产产物…"
-npm run build
-
+# 先校验模式，避免非法参数还白跑一次构建。
 case "$MODE" in
-  build)
-    log "仅构建，结束。"
-    exit 0
-    ;;
-  desktop|mobile|compare|all) ;;
+  build|desktop|mobile|compare|all) ;;
   *)
-    echo "未知模式：$MODE（可选 all|desktop|mobile|compare|build）" >&2
+    echo "未知模式：${MODE}（可选 all|desktop|mobile|compare|build）" >&2
     exit 2
     ;;
 esac
+
+log "构建生产产物…"
+npm run build
+
+if [ "$MODE" = "build" ]; then
+  log "仅构建，结束。"
+  exit 0
+fi
 
 start_preview
 log "回归目标地址：$BASE"
@@ -131,7 +133,7 @@ esac
 
 echo
 if [ "$FAIL" -eq 0 ]; then
-  echo "✅ 全部浏览器回归通过（模式：$MODE）"
+  echo "✅ 全部浏览器回归通过（模式：${MODE}）"
 else
   echo "❌ 存在失败的回归用例，请查看上方输出与失败截图（FAIL.png）。" >&2
   exit 1
