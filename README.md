@@ -21,9 +21,12 @@ npm run e2e:desktop      # 仅桌面主流程（1440px，44 项断言）
 npm run e2e:mobile       # 仅手机主流程（390px，37 项断言，含横向溢出检查）
 npm run e2e:compare       # 双问题对比（桌面 30 + 手机 34 项断言）
 npm run e2e:env          # 只准备浏览器环境（幂等），不跑测试
+npm run e2e:test         # 入口轻量测试（不下载浏览器、不起真实服务，秒级）
 npm run e2e:build        # 等同于 npm run build（走统一脚本的构建路径）
 # 也可以：bash scripts/e2e.sh [all|desktop|mobile|compare|build]
 ```
+
+**`npm run e2e:test`**（`scripts/test-entry.sh`）是统一入口本身的快速冒烟测试，与浏览器回归解耦：用临时目录 + 伪造的浏览器/vite/npx，校验正常输出、非零退出与关键中文提示——未知模式退出 2、预览起不来退出 1、浏览器缺失退出 1 且提示保留「产物目录」、build 成功退出 0，并静态扫描确认中文标点前的变量都用 `${var}` 定界。不访问网络、不下载浏览器、不改业务代码，建议改脚本后先跑它。
 
 四套 Playwright 用例：`e2e.mjs`（桌面主流程）、`e2e-mobile.mjs`（手机主流程）、`e2e-compare.mjs`（对比，`MOBILE=1` 切换手机视口）。每个用例启动时都会清空本站点的 `localStorage` 键并从内置种子数据起步，**不依赖也不改动你在浏览器里的真实数据**；失败时在对应截图目录留下 `FAIL.png`。
 

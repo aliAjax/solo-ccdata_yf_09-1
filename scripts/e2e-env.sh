@@ -19,7 +19,8 @@
 set -eo pipefail
 
 E2E_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-E2E_TOOLS="$E2E_ROOT/.e2e-tools"
+# 测试/覆盖用接缝：允许把所有产物重定向到临时目录，并跳过字体安装（默认行为不变）。
+E2E_TOOLS="${E2E_TOOLS_DIR:-$E2E_ROOT/.e2e-tools}"
 E2E_SYSROOT="$E2E_TOOLS/sysroot"
 E2E_APT="$E2E_TOOLS/apt"
 E2E_DEBS="$E2E_TOOLS/debs"
@@ -62,8 +63,10 @@ find_headless_shell() {
 
 HEADLESS_SHELL="$(find_headless_shell)"
 if [ -z "$HEADLESS_SHELL" ]; then
-  log "下载 Playwright Chromium 到 $PLAYWRIGHT_BROWSERS_PATH …"
-  (cd "$E2E_ROOT" && npx playwright install chromium)
+  log "下载 Playwright Chromium 到 ${PLAYWRIGHT_BROWSERS_PATH} …"
+  # 下载可能失败（断网/超时）。不要让 set -e 直接退出——落到下面的 die，
+  # 以便给出带产物目录的明确提示。
+  (cd "$E2E_ROOT" && npx playwright install chromium) || true
   HEADLESS_SHELL="$(find_headless_shell)"
 fi
 [ -n "$HEADLESS_SHELL" ] || die "Chromium 下载失败，请检查网络后重试（产物目录：${PLAYWRIGHT_BROWSERS_PATH}）。"
@@ -71,6 +74,10 @@ log "浏览器：$HEADLESS_SHELL"
 
 # ---------- 3. 中文字体（截图里中文不能是方框） ------------------------------
 ensure_cjk_font() {
+  # 覆盖接缝：测试或无字体需求的环境可显式跳过。
+  if [ "${E2E_SKIP_FONT:-0}" = "1" ]; then
+    return 0
+  fi
   # macOS 自带 PingFang/STHeiti 等中文字体，无需处理。
   if [ "$IS_MAC" = "1" ]; then
     log "macOS 自带中文字体（PingFang 等），跳过字体准备。"

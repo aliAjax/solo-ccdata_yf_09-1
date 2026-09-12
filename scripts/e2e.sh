@@ -23,6 +23,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 MODE="${1:-all}"
 PORT="${E2E_PORT:-4173}"
+# 覆盖接缝（默认值即生产路径）：测试可注入伪造的 vite，并用很少的轮询快速验证失败路径。
+VITE_BIN="${E2E_VITE_BIN:-$ROOT/node_modules/.bin/vite}"
+PREVIEW_TRIES="${E2E_PREVIEW_TRIES:-40}"
 BASE="http://localhost:${PORT}/"
 export E2E_BASE="$BASE"
 
@@ -50,28 +53,26 @@ start_preview() {
     log "端口 $PORT 上已有服务，直接复用。"
     return 0
   fi
-  if [ ! -x "$ROOT/node_modules/.bin/vite" ]; then
-    echo "找不到 node_modules/.bin/vite——npm 依赖未装好，无法启动预览。" >&2
+  if [ ! -x "$VITE_BIN" ]; then
+    echo "找不到 vite 可执行文件（${VITE_BIN}）——npm 依赖未装好，无法启动预览。" >&2
     exit 1
   fi
   log "启动 vite preview（端口 ${PORT}，日志 .e2e-tools/preview.log）…"
   # 直接用本地 vite 可执行文件，使 $! 就是服务进程（npx 会再派生一层子进程，
   # 只杀 npx 会导致预览服务泄漏）。
-  nohup "$ROOT/node_modules/.bin/vite" preview --port "$PORT" --strictPort \
+  nohup "$VITE_BIN" preview --port "$PORT" --strictPort \
     > "$E2E_TOOLS/preview.log" 2>&1 &
   PREVIEW_PID=$!
-  # {1..40} 大括号展开在 Bash 3.2（macOS 自带）即可用，避免依赖外部 seq。
-  local i
-  for i in {1..40}; do
+  # 轮询到 HTTP 200 才继续。次数可由 E2E_PREVIEW_TRIES 覆盖（测试快速验证失败路径）。
+  local i=0
+  while [ "$i" -lt "$PREVIEW_TRIES" ]; do
+    i=$((i + 1))
     if curl -fsS -o /dev/null --max-time 2 "$BASE"; then
-      # 确认进程仍在（端口可能是残留服务但本进程已崩）。
-      if kill -0 "$PREVIEW_PID" 2>/dev/null || curl -fsS -o /dev/null --max-time 2 "$BASE"; then
-        return 0
-      fi
+      return 0
     fi
     sleep 0.3
   done
-  echo "预览服务器在 12s 内未就绪，日志如下：" >&2
+  echo "预览服务器在限定时间内未就绪，日志如下：" >&2
   cat "$E2E_TOOLS/preview.log" >&2 || true
   exit 1
 }

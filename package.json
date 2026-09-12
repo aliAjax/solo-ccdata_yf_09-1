@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "e2e:env": "bash scripts/e2e-env.sh",
+    "e2e:test": "bash scripts/test-entry.sh",
     "e2e:build": "bash scripts/e2e.sh build",
     "e2e": "bash scripts/e2e.sh all",
     "e2e:desktop": "bash scripts/e2e.sh desktop",
