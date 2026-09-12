@@ -57,6 +57,16 @@ export default function App() {
       </aside>
 
       <main>
+        <div className="mobile-tabs" role="tablist" aria-label="视图切换">
+          <button role="tab" aria-selected={view === 'library'}
+            className={view === 'library' ? 'on' : ''} onClick={() => setView('library')}>
+            ▤ 所有文献 <b>{store.papers.length}</b>
+          </button>
+          <button role="tab" aria-selected={view === 'workbench'}
+            className={view === 'workbench' ? 'on' : ''} onClick={() => setView('workbench')}>
+            ◈ 问题工作台 <b>{nQuestions}</b>
+          </button>
+        </div>
         {view === 'library' ? (
           <Library store={store} notice={notice} goQuestion={goQuestion} />
         ) : (
