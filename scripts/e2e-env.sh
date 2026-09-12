@@ -13,7 +13,10 @@
 # 可单独执行（bash scripts/e2e-env.sh），也可被 e2e.sh source。
 # 可设 E2E_OS=Darwin 在 Linux 上模拟走 macOS 分支（仅用于脚本自测）。
 # =============================================================================
-set -euo pipefail
+# 不使用 `set -u`(nounset)：Bash 3.2（macOS 自带）下未绑定变量的中止退出码是 0，
+# 且 EXIT trap 里 $? 也是 0，会把展开错误伪装成成功。这里统一用 ${var:-} 默认值
+# 规避未绑定展开；真实失败由 errexit / 调用方的退出码体现（非零）。
+set -eo pipefail
 
 E2E_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 E2E_TOOLS="$E2E_ROOT/.e2e-tools"
@@ -166,14 +169,14 @@ apt_download_one() {
   mkdir -p "$dest"
   if ! compgen -G "$E2E_APT/lists/*_Packages" >/dev/null 2>&1 && [ ! -f "$E2E_APT/.updated" ]; then
     log "apt 包列表为空，执行 update（使用项目内缓存目录）…"
-    apt-get "${APT_OPTS[@]}" update >/dev/null 2>&1 || true
+    apt-get ${APT_OPTS[@]+"${APT_OPTS[@]}"} update >/dev/null 2>&1 || true
     touch "$E2E_APT/.updated"
   fi
   for attempt in 1 2 3; do
     f="$(find "$dest" -maxdepth 1 -name "${pkg}_*.deb" -type f -size +1k 2>/dev/null | head -1 || true)"
     if [ -n "$f" ] && deb_intact "$f"; then return 0; fi
     [ -n "$f" ] && rm -f "$f"   # 截断/损坏包删除后重下
-    (cd "$dest" && apt-get "${APT_OPTS[@]}" download "$pkg" >/dev/null 2>&1) || true
+    (cd "$dest" && apt-get ${APT_OPTS[@]+"${APT_OPTS[@]}"} download "$pkg" >/dev/null 2>&1) || true
     f="$(find "$dest" -maxdepth 1 -name "${pkg}_*.deb" -type f -size +1k 2>/dev/null | head -1 || true)"
     if [ -n "$f" ] && deb_intact "$f"; then return 0; fi
     [ "$attempt" -lt 3 ] && sleep 2
@@ -212,7 +215,7 @@ ensure_sys_libs() {
   apt_configure
   if [ ! -f "$E2E_APT/.updated" ]; then
     log "apt update（使用项目内缓存目录）…"
-    apt-get "${APT_OPTS[@]}" update >/dev/null 2>&1 || true
+    apt-get ${APT_OPTS[@]+"${APT_OPTS[@]}"} update >/dev/null 2>&1 || true
     touch "$E2E_APT/.updated"
   fi
 
@@ -220,7 +223,7 @@ ensure_sys_libs() {
   # 统一走 apt_download_one：已存在且完整的 .deb 直接复用；截断/损坏会删除重下；
   # 每包最多尝试 3 次。兼容精简容器里偶发的进程被杀/断流。
   local pkg
-  for pkg in "${E2E_DEB_PACKAGES[@]}"; do
+  for pkg in ${E2E_DEB_PACKAGES[@]+"${E2E_DEB_PACKAGES[@]}"}; do
     if apt_download_one "$pkg" "$E2E_DEBS/libs"; then
       :
     else

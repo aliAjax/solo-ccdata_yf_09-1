@@ -13,7 +13,11 @@
 #   E2E_PORT=4200      覆盖预览端口（默认 4173）
 #   E2E_SKIP_SYSDEPS=1 跳过浏览器系统库的本地解包（宿主已自备库时）
 # =============================================================================
-set -euo pipefail
+# 注意：不使用 `set -u`(nounset)。Bash 3.2（macOS 自带）下，未绑定变量导致的
+# 中止退出码是 0，且 ERR/EXIT trap 拿到的 $? 也是 0——会把这类错误伪装成成功。
+# 改为依赖显式的 ${var:-} 默认值来规避未绑定展开，并靠 errexit + trap 保证
+# 真实失败一定返回非零。
+set -eo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -28,13 +32,27 @@ source "$ROOT/scripts/e2e-env.sh"
 
 log() { printf '\033[2m[e2e]\033[0m %s\n' "$*"; }
 PREVIEW_PID=""
-cleanup() { [ -n "$PREVIEW_PID" ] && kill "$PREVIEW_PID" 2>/dev/null || true; }
+# 关键：先保存进入 trap 时的退出码，清理后再以该码退出。
+# 否则在 Bash 3.2（macOS 自带）里，cleanup 末尾的 `|| true` 会让 trap 返回 0，
+# 从而把“变量展开错误/set -e 中止”等真实失败覆盖成成功码（Bash 4.4+ 才默认保留原码）。
+cleanup() {
+  local rc=$?
+  if [ -n "$PREVIEW_PID" ]; then
+    kill "$PREVIEW_PID" 2>/dev/null || true
+    wait "$PREVIEW_PID" 2>/dev/null || true
+  fi
+  return "$rc"
+}
 trap cleanup EXIT
 
 start_preview() {
   if curl -fsS -o /dev/null --max-time 2 "$BASE"; then
     log "端口 $PORT 上已有服务，直接复用。"
-    return
+    return 0
+  fi
+  if [ ! -x "$ROOT/node_modules/.bin/vite" ]; then
+    echo "找不到 node_modules/.bin/vite——npm 依赖未装好，无法启动预览。" >&2
+    exit 1
   fi
   log "启动 vite preview（端口 $PORT，日志 .e2e-tools/preview.log）…"
   # 直接用本地 vite 可执行文件，使 $! 就是服务进程（npx 会再派生一层子进程，
@@ -45,10 +63,15 @@ start_preview() {
   # {1..40} 大括号展开在 Bash 3.2（macOS 自带）即可用，避免依赖外部 seq。
   local i
   for i in {1..40}; do
-    curl -fsS -o /dev/null --max-time 2 "$BASE" && return 0
+    if curl -fsS -o /dev/null --max-time 2 "$BASE"; then
+      # 确认进程仍在（端口可能是残留服务但本进程已崩）。
+      if kill -0 "$PREVIEW_PID" 2>/dev/null || curl -fsS -o /dev/null --max-time 2 "$BASE"; then
+        return 0
+      fi
+    fi
     sleep 0.3
   done
-  echo "预览服务器启动失败，日志如下：" >&2
+  echo "预览服务器在 12s 内未就绪，日志如下：" >&2
   cat "$E2E_TOOLS/preview.log" >&2 || true
   exit 1
 }

@@ -29,16 +29,18 @@ npm run e2e:build        # 等同于 npm run build（走统一脚本的构建路
 
 ### 环境准备做了什么（`scripts/e2e-env.sh`，幂等、无 root）
 
-脚本做了平台检测，同时兼容 **macOS 自带 Bash 3.2** 与 **Linux（含精简 Debian 容器）**；不使用关联数组、`mapfile` 等 Bash 4+ 语法。首次运行自动完成、已就绪即跳过，产物都在项目内 `.e2e-tools/`（已 gitignore），不写系统目录：
+脚本做了平台检测，同时兼容 **macOS 自带 Bash 3.2** 与 **Linux（含精简 Debian 容器）**；不使用关联数组、`mapfile` 等 Bash 4+ 语法，数组展开统一用 `${arr[@]+"${arr[@]}"}` 形式。首次运行自动完成、已就绪即跳过，产物都在项目内 `.e2e-tools/`（已 gitignore），不写系统目录：
 
 1. 缺 npm 依赖时 `npm ci`（回退 `npm install`）；
 2. 通过 `PLAYWRIGHT_BROWSERS_PATH=.e2e-tools/pw-browsers` 在项目内下载 Playwright Chromium（按平台自动定位二进制，不写死 linux 路径）；
 3. **仅 Linux**：若 `ldd` 发现浏览器缺系统共享库，逐包用项目内 apt 缓存 `apt-get download` 拉 **.deb**、通过完整性校验后解包到 `.e2e-tools/sysroot`，运行时以 `LD_LIBRARY_PATH` 加载——不执行 sudo、不改系统库。**macOS 直接跳过**（Playwright 浏览器自包含依赖、系统自带中文字体），不调用 `ldd/apt/dpkg`；
 4. 无中文字体的 Linux：下载 `fonts-wqy-zenhei` 安装到用户字体目录 `~/.fonts`（仅为截图中文不成方框；失败只警告，不影响断言）。
 
-健壮性细节：下载的每个 .deb 都会用 `dpkg-deb --fsys-tarfile | tar t` **全量校验**（慢网络可能留下“字节数看似正确、数据段却截断”的包，仅 `-I` 查不出来），损坏即删除重下、最多 3 次；系统库只解包通过校验的包，避免截断的 `libnss3.so` 等导致浏览器 `SIGBUS` 崩溃。所有“探测型”命令（如 `ldd`）都在函数里兜底为成功返回，避免 `set -e` 下 `v="$(...)"` 因命令不存在（macOS 无 `ldd`）而**直接终止脚本**。
+健壮性细节：下载的每个 .deb 都会用 `dpkg-deb --fsys-tarfile | tar t` **全量校验**（慢网络可能留下“字节数看似正确、数据段却截断”的包，仅 `-I` 查不出来），损坏即删除重下、最多 3 次；系统库只解包通过校验的包，避免截断的 `libnss3.so` 等导致浏览器 `SIGBUS` 崩溃。所有“探测型”命令（如 `ldd`）都在函数里兜底为成功返回。
 
-运行配置：`scripts/e2e.sh` 构建后直接用 `node_modules/.bin/vite preview --port 4173 --strictPort` 起服务（避免 `npx` 多一层进程导致清理时泄漏；端口被占用则复用），把地址经 `E2E_BASE` 传给用例，`trap` 在退出时关掉自己启动的预览进程；单个用例首次失败会自动重试一次。
+退出码保证（曾在 macOS Bash 3.2 上踩坑）：脚本用 `set -eo pipefail` 而**不使用 `set -u`**——Bash 3.2 下未绑定变量导致的中止退出码竟是 0，且 EXIT trap 里 `$?` 也是 0，会把变量展开错误伪装成成功；因此统一用 `${var:-}` 默认值规避未绑定展开。EXIT trap 会先保存进入时的 `$?`、清理预览进程后再以该码 `exit`，避免 trap 末尾命令把退出码重置为 0。因此：任一用例失败 / 构建失败 / 预览起不来，`npm run e2e` 一律返回**非零**；全部通过才返回 0。
+
+运行配置：`scripts/e2e.sh` 构建后直接用 `node_modules/.bin/vite preview --port 4173 --strictPort` 起服务（避免 `npx` 多一层进程导致清理时泄漏；启动前会检查 vite 可执行存在、轮询到 HTTP 200 才继续；端口被占用则复用），把地址经 `E2E_BASE` 传给用例，`trap` 在退出时关掉自己启动的预览进程；单个用例首次失败会自动重试一次。
 
 可用环境变量：
 
